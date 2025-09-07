@@ -15,19 +15,23 @@ function Mouse(world, pos){
     this.world = world;
     this.pos = pos;
     this.vel = vec();
-    this.dir = 0;
+    this.rot = 0;
     this.radius = 0.4;
 }
 
 Mouse.prototype.update = function(dt){
-
+    this.rot += dt;
 }
 
 Mouse.prototype.draw = function(cam){
     ctx.fillStyle = "rgb(125, 92, 54)";
     ctx.beginPath();
     let cvPos = stc(this.pos, cam);
-    ctx.arc(cvPos.x, cvPos.y, this.radius*cam.zoom, 0, Math.PI*2);
+    ctx.arc(cvPos.x, cvPos.y, this.radius*cam.zoom, this.rot-cam.a+Math.PI/2, this.rot-cam.a+3*Math.PI/2);
+    let r = this.radius*1.5
+    let noseP = stc(this.pos.add(vec(r*Math.cos(this.rot), r*Math.sin(this.rot))), cam);
+    ctx.lineTo(noseP.x, noseP.y);
+    ctx.closePath();
     ctx.fill();
 }
 
@@ -61,6 +65,8 @@ aaaaaaaa
 }
 
 World.prototype.update = function(dt){
+    this.cam.a = this.mouse.rot+Math.PI/2;
+    this.cam.pos = this.mouse.pos.copy();
     for(object of this.objects){
         if(object.update !== undefined){
             object.update(dt);
@@ -100,15 +106,16 @@ World.prototype.draw = function(){
 
 function Game(){
     this.world = new World();
+    console.log(this.world);
 }
 
 Game.prototype.loop = function(){
-    this.world.update(1/30)
+    this.world.update(1/30);
     this.world.draw();
 }
 
 Game.prototype.run = function(){
-    setInterval(this.loop(), 1000/30);
+    setInterval(this.loop.bind(this), 1000/30);
 }
 
 
