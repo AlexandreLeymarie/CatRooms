@@ -39,7 +39,31 @@ Mouse.prototype.update = function(dt){
     this.rotVel += (rotVelTarget-this.rotVel)*(1-Math.pow(1-0.9, dt/0.2))
     this.rot += this.rotVel;
     this.vel = this.vel.add(velTarget.sub(this.vel).mul(1-Math.pow(1-0.9, dt/0.2)));
+    let lastPos = this.pos.copy();
     this.pos = this.pos.add(this.vel.mul(dt));
+    this.resolveCollisions();
+    this.vel = this.pos.sub(lastPos).mul(1/dt);
+}
+
+Mouse.prototype.resolveCollisions = function(){
+    let gx = Math.floor(this.pos.x), gy = Math.floor(this.pos.y)
+    for(let y = gy-1; y<=gy+1; y++)
+        for(let x = gx-1; x<=gx+1; x++){
+            if (
+                y >= 0 && y < this.world.grid.length &&
+                x >= 0 && x < this.world.grid[y].length &&
+                this.world.grid[y][x] !== ' '
+              ){
+            let nearest = vec(Math.max(x, Math.min(this.pos.x, x+1)), Math.max(y, Math.min(this.pos.y, y+1)));
+            let delta = this.pos.sub(nearest)
+            let dist2 = delta.dot(delta);
+            if(dist2 < this.radius*this.radius){
+            let dist = Math.sqrt(dist2) || 0.0001
+            let push = delta.mul((this.radius - dist)/dist)
+            this.pos = this.pos.add(push)
+            }
+        }
+        } 
 }
 
 Mouse.prototype.draw = function(cam){
@@ -61,11 +85,11 @@ function World(){
     this.cam = {pos: vec(), rot: 0, zoom: 40};
     let gridStr = 
 `
-aaa aaaa
-a      a
-       a
-a      a
-aaaaaaaa
+     aaa aaaaaaaaa
+     a      a
+            a
+aaaaaa      a
+     aaaaaaaa
 `;
     this.grid = [];
     let i = -1; let j = 0;
@@ -85,7 +109,7 @@ aaaaaaaa
 
 World.prototype.update = function(dt){
     this.cam.rot += ((this.mouse.rot+Math.PI/2)-this.cam.rot)*(1-Math.pow(1-0.95, dt));
-    this.cam.pos = this.cam.pos.add(this.mouse.pos.sub(this.cam.pos).mul(1-Math.pow(1-0.95, dt/.2)));
+    this.cam.pos = this.cam.pos.add(this.mouse.pos.sub(this.cam.pos).mul(1-Math.pow(1-1, dt/.2)));
     for(object of this.objects){
         if(object.update !== undefined){
             object.update(dt);
