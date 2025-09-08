@@ -31,21 +31,24 @@ function Mouse(world, pos){
 }
 
 Mouse.prototype.update = function(dt){
-    let velTarget = vec(Math.cos(this.rot), Math.sin(this.rot)).mul((keyList["ArrowUp"]?10:0)-(keyList["ArrowDown"]?5:0));
-    if(keyList["ArrowUp"]){
-        velTarget = vec(Math.cos(this.rot), Math.sin(this.rot)).mul(10);
-    }
+    let velTarget = vec(Math.cos(this.rot), Math.sin(this.rot)).mul((keyList["ArrowUp"]?15:0)-(keyList["ArrowDown"]?5:0));
     let rotVelTarget = ((keyList["ArrowRight"]?1:0)-(keyList["ArrowLeft"]?1:0))*.1;
     this.rotVel += (rotVelTarget-this.rotVel)*(1-Math.pow(1-0.9, dt/0.2))
     this.rot += this.rotVel;
-    this.vel = this.vel.add(velTarget.sub(this.vel).mul(1-Math.pow(1-0.9, dt/0.2)));
+    this.vel = this.vel.add(velTarget.sub(this.vel).mul(1-Math.pow(1-0.9, dt/0.5)));
     let lastPos = this.pos.copy();
-    this.pos = this.pos.add(this.vel.mul(dt));
-    this.resolveCollisions();
+    let pos2 = this.pos.add(this.vel.mul(dt));
+    let d = pos2.sub(this.pos);
+    let it = Math.ceil(d.length()/this.radius);
+    for(let i = 1; i <= it; i++){
+        this.pos = lastPos.add(d.mul(i/it));
+        if(this.resolveCollisions()) break;
+    }
     this.vel = this.pos.sub(lastPos).mul(1/dt);
 }
 
 Mouse.prototype.resolveCollisions = function(){
+    let col = false;
     let gx = Math.floor(this.pos.x), gy = Math.floor(this.pos.y)
     for(let y = gy-1; y<=gy+1; y++)
         for(let x = gx-1; x<=gx+1; x++){
@@ -61,9 +64,11 @@ Mouse.prototype.resolveCollisions = function(){
             let dist = Math.sqrt(dist2) || 0.0001
             let push = delta.mul((this.radius - dist)/dist)
             this.pos = this.pos.add(push)
+            col = true;
             }
         }
         } 
+    return col;
 }
 
 Mouse.prototype.draw = function(cam){
@@ -85,11 +90,15 @@ function World(){
     this.cam = {pos: vec(), rot: 0, zoom: 40};
     let gridStr = 
 `
-     aaa aaaaaaaaa
-     a      a
-            a
-aaaaaa      a
-     aaaaaaaa
+aaaaaaaaaaa
+          a
+a   a     a
+a   a     a
+a   aaaaa a
+a         a
+a aaaaa   a
+a          
+aaaaaaaaaaa
 `;
     this.grid = [];
     let i = -1; let j = 0;
