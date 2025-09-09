@@ -30,14 +30,25 @@ function Mouse(world, pos){
     this.rot = 0;
     this.rotVel = 0;
     this.radius = 0.25;
+
+    this.hit = 0;
 }
 
 Mouse.prototype.update = function(dt){
     let velTarget = arVec(this.rot, (keyList["ArrowUp"]?15:0)-(keyList["ArrowDown"]?5:0));
     let rotVelTarget = ((keyList["ArrowRight"]?1:0)-(keyList["ArrowLeft"]?1:0))*.1;
-    this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .9, .2)
+    this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .8, .2)
     this.rot += this.rotVel;
     this.vel = lerpDt(this.vel, velTarget, dt, .9, .5);
+    for(let paw of this.world.cat.paws){
+        let d = this.pos.sub(paw);
+        let dd = this.radius+this.world.cat.pawR;
+        if(d.length() < dd){
+            this.pos = paw.add(d.normalize().mul(dd+this.radius*.1));
+            this.vel = this.vel.add(d.normalize().mul(10));
+            this.hit = .2;
+        }
+    }
     let lastPos = this.pos.copy();
     let pos2 = this.pos.add(this.vel.mul(dt));
     let d = pos2.sub(this.pos);
@@ -47,6 +58,8 @@ Mouse.prototype.update = function(dt){
         if(this.resolveCollisions()) break;
     }
     this.vel = this.pos.sub(lastPos).mul(1/dt);
+
+    this.hit-=dt;
 }
 
 Mouse.prototype.resolveCollisions = function(){
@@ -74,7 +87,7 @@ Mouse.prototype.resolveCollisions = function(){
 }
 
 Mouse.prototype.draw = function(cam){
-    ctx.fillStyle = "rgb(125, 92, 54)";
+    ctx.fillStyle = this.hit > 0 ? "white" : "rgb(125, 92, 54)";
     ctx.beginPath();
     let cvPos = spaceToCanvas(this.pos, cam);
     ctx.arc(cvPos.x, cvPos.y, this.radius*cam.zoom, this.rot-cam.rot+Math.PI/2, this.rot-cam.rot+3*Math.PI/2);
@@ -152,38 +165,57 @@ Cat.prototype.draw = function(cam){
         ctx.stroke();
     }
 }
+const parseGrid = s => (/\d/.test(s)?s.replace(/(\d+)([\s\S])/g,(_,n,c)=>c.repeat(+n)):s).split('\n').map(r=>r.split(''));
 
 function World(){
     this.mouse = new Mouse(this, vec(-1));
-    this.cat = new Cat(this, vec(-5));
+    this.cat = new Cat(this, vec(-8));
     this.objects = [this.mouse, this.cat];
     this.cam = {pos: vec(), rot: 0, zoom: 50};
     let gridStr = 
 `
-aaaaaaaaaaa
-          a
-a   a     a
-a   a     a
-a   aaaaa a
-a         a
-a aaaaa   a
-a          
-aaaaaaaaaaa
+26a1
+1a24 1a1
+1a1 6a1 15a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a9 2a4 6a1 1a1
+1a1 1a9 2a4 6a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 7a3 2a9 1a1 1a1
+1a1 7a3 2a9 1a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a9 2a9 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a1 1a20 1a1 1a1
+1a24 1a1
+1a1 1a20 1a1 1a1
+11a3 12a1
 `;
-    this.grid = [];
-    let i = -1; let j = 0;
-    for(let char of gridStr){
-        if(char == '\n'){
-            i++;
-            j = 0;
-        } else {
-            if(j == 0) this.grid[i] = [];
-            this.grid[i][j] = char;
-            j++;
-        }
-    }
+    this.grid = parseGrid(gridStr);
+    // this.grid = [];
+    // let i = -1; let j = 0;
+    // for(let char of gridStr){
+    //     if(char == '\n'){
+    //         i++;
+    //         j = 0;
+    //     } else {
+    //         if(j == 0) this.grid[i] = [];
+    //         this.grid[i][j] = char;
+    //         j++;
+    //     }
+    // }
 
-    console.log(this.grid);
+    // console.log(this.grid);
 }
 
 World.prototype.update = function(dt){
