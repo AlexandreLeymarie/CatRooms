@@ -2,13 +2,13 @@
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 
-cv.width = 854;
-cv.height = 480;
+cv.width = 800;
+cv.height = 700;
 
-const rotate=(v,a)=>{let c=Math.cos(a),s=Math.sin(a);return vec(v.x*c-v.y*s,v.x*s+v.y*c)}
-const spaceToCanvas=(p,cam)=>rotate(p.sub(cam.pos),-cam.rot).mul(cam.zoom).add(vec(cv.width/2,cv.height/2))
-const canvasToSpace=(p,cam)=>rotate(p.sub(vec(cv.width/2,cv.height/2)).mul(1/cam.zoom),cam.rot).add(cam.pos)
-
+let rotate=(v,a)=>{let c=Math.cos(a),s=Math.sin(a);return vec(v.x*c-v.y*s,v.x*s+v.y*c)}
+let spaceToCanvas=(p,cam)=>rotate(p.sub(cam.pos),-cam.rot).mul(cam.zoom).add(vec(cv.width/2,cv.height/2))
+let canvasToSpace=(p,cam)=>rotate(p.sub(vec(cv.width/2,cv.height/2)).mul(1/cam.zoom),cam.rot).add(cam.pos)
+//let interDt = ()
 
 const keyList = [];
 window.addEventListener('keydown',function(event){
@@ -27,7 +27,7 @@ function Mouse(world, pos){
     this.vel = vec();
     this.rot = 0;
     this.rotVel = 0;
-    this.radius = 0.4;
+    this.radius = 0.25;
 }
 
 Mouse.prototype.update = function(dt){
@@ -96,9 +96,9 @@ function Cat(world, pos){
         this.paws[i] = this.pos.add(this.pawsOffset[i]);
         this.pawsTargets[i] = this.paws[i];
     }
-    this.headR = 1.2;
-    this.pawR = 0.8;
-    this.bodyR = 1.6;
+    this.headR = 1;
+    this.pawR = 0.6;
+    this.bodyR = 1.3;
     this.legL = 3;
 }
 
@@ -114,7 +114,7 @@ Cat.prototype.update = function(dt){
     for(let i = 0; i < 4; i++){
         let target = this.pos.add(rotate(this.pawsOffset[i], Math.atan2(-this.vel.y, this.vel.x)));
         if(this.paws[i].sub(target).length() > this.legL){
-            this.pawsTargets[i] = d.length() < this.legL*2 ? this.world.mouse.pos : target;
+            this.pawsTargets[i] = d.length() < this.legL*1.5 ? this.world.mouse.pos : target;
         }
         this.paws[i] = this.paws[i].add(this.pawsTargets[i].sub(this.paws[i]).mul(1-Math.pow(1-0.8, dt/0.1)));
     }
@@ -149,7 +149,7 @@ function World(){
     this.mouse = new Mouse(this, vec(-1));
     this.cat = new Cat(this, vec(-5));
     this.objects = [this.mouse, this.cat];
-    this.cam = {pos: vec(), rot: 0, zoom: 40};
+    this.cam = {pos: vec(), rot: 0, zoom: 50};
     let gridStr = 
 `
 aaaaaaaaaaa
