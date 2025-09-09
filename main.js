@@ -8,7 +8,9 @@ cv.height = 700;
 let rotate=(v,a)=>{let c=Math.cos(a),s=Math.sin(a);return vec(v.x*c-v.y*s,v.x*s+v.y*c)}
 let spaceToCanvas=(p,cam)=>rotate(p.sub(cam.pos),-cam.rot).mul(cam.zoom).add(vec(cv.width/2,cv.height/2))
 let canvasToSpace=(p,cam)=>rotate(p.sub(vec(cv.width/2,cv.height/2)).mul(1/cam.zoom),cam.rot).add(cam.pos)
-//let interDt = ()
+let lerpDtCoef = (dt, p, t)=>1-Math.pow(1-p, dt/t)
+let lerpDt = (a, b, dt, p, t)=>a.add(b.sub(a).mul(lerpDtCoef(dt, p, t)))
+let arVec = (a, r) => vec(Math.cos(a), Math.sin(a)).mul(r)
 
 const keyList = [];
 window.addEventListener('keydown',function(event){
@@ -31,11 +33,11 @@ function Mouse(world, pos){
 }
 
 Mouse.prototype.update = function(dt){
-    let velTarget = vec(Math.cos(this.rot), Math.sin(this.rot)).mul((keyList["ArrowUp"]?15:0)-(keyList["ArrowDown"]?5:0));
+    let velTarget = arVec(this.rot, (keyList["ArrowUp"]?15:0)-(keyList["ArrowDown"]?5:0));
     let rotVelTarget = ((keyList["ArrowRight"]?1:0)-(keyList["ArrowLeft"]?1:0))*.1;
-    this.rotVel += (rotVelTarget-this.rotVel)*(1-Math.pow(1-0.9, dt/0.2))
+    this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .9, .2)
     this.rot += this.rotVel;
-    this.vel = this.vel.add(velTarget.sub(this.vel).mul(1-Math.pow(1-0.9, dt/0.5)));
+    this.vel = lerpDt(this.vel, velTarget, dt, .9, .5);
     let lastPos = this.pos.copy();
     let pos2 = this.pos.add(this.vel.mul(dt));
     let d = pos2.sub(this.pos);
@@ -77,7 +79,7 @@ Mouse.prototype.draw = function(cam){
     let cvPos = spaceToCanvas(this.pos, cam);
     ctx.arc(cvPos.x, cvPos.y, this.radius*cam.zoom, this.rot-cam.rot+Math.PI/2, this.rot-cam.rot+3*Math.PI/2);
     let r = this.radius*1.2;
-    let noseP = spaceToCanvas(this.pos.add(vec(r*Math.cos(this.rot), r*Math.sin(this.rot))), cam);
+    let noseP = spaceToCanvas(this.pos.add(arVec(this.rot, r)), cam);
     ctx.lineTo(noseP.x, noseP.y);
     ctx.closePath();
     ctx.fill();
@@ -89,7 +91,7 @@ function Cat(world, pos){
     this.vel = vec(0);
     let d = 2.5;
     this.head = this.pos.add(vec(0,d));
-    this.pawsOffset = [vec(-d, -d),vec(d, -d),vec(d,d),vec(-d,d)];
+    this.pawsOffset = [vec(-d, -d),vec(d, -d),vec(d,d*2),vec(-d,d*2)];
     this.paws = [];
     this.pawsTargets = [];
     for(let i = 0; i < 4; i++){
@@ -105,43 +107,49 @@ function Cat(world, pos){
 Cat.prototype.update = function(dt){
     let d = this.world.mouse.pos.sub(this.pos);
     let velTarget = d.normalize().mul(5);
-    this.vel = this.vel.add(velTarget.sub(this.vel).mul(1-Math.pow(1-0.9, dt/0.5)));
+    this.vel = lerpDt(this.vel, velTarget, dt, .9, .5)
     this.pos = this.pos.add(this.vel.mul(dt));
 
     let headTarget = this.pos.add(this.vel.normalize().mul(4))
-    this.head = this.head.add(headTarget.sub(this.head).mul(1-Math.pow(1-0.8, dt/0.5)));
+    this.head = lerpDt(this.head, headTarget, dt, .8, .5)
 
     for(let i = 0; i < 4; i++){
         let target = this.pos.add(rotate(this.pawsOffset[i], Math.atan2(-this.vel.y, this.vel.x)));
         if(this.paws[i].sub(target).length() > this.legL){
             this.pawsTargets[i] = d.length() < this.legL*1.5 ? this.world.mouse.pos : target;
         }
-        this.paws[i] = this.paws[i].add(this.pawsTargets[i].sub(this.paws[i]).mul(1-Math.pow(1-0.8, dt/0.1)));
+        this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1)
     }
 }
 
 Cat.prototype.draw = function(cam){
     ctx.fillStyle = "black";
     ctx.beginPath();
-    let p = spaceToCanvas(this.head, cam);
-    ctx.arc(p.x, p.y, this.headR*cam.zoom, 0, Math.PI*2);
+    let headP = spaceToCanvas(this.head, cam);
+    ctx.arc(headP.x, headP.y, this.headR*cam.zoom, 0, Math.PI*2);
     ctx.fill();
 
     ctx.beginPath();
-    p = spaceToCanvas(this.pos, cam);
-    ctx.arc(p.x, p.y, this.bodyR*cam.zoom, 0, Math.PI*2);
+    let bodyP = spaceToCanvas(this.pos, cam);
+    ctx.arc(bodyP.x, bodyP.y, this.bodyR*cam.zoom, 0, Math.PI*2);
     ctx.fill();
 
-    let i = 0;
-    for(let pa of this.paws){
-        if(true){
-            ctx.beginPath();
-            p = spaceToCanvas(pa, cam);
-            ctx.arc(p.x, p.y, this.pawR*cam.zoom, 0, Math.PI*2);
-            ctx.fill();
-        }
+    ctx.beginPath();
+    ctx.moveTo(headP.x, headP.y);
+    ctx.lineTo(bodyP.x, bodyP.y);
+    ctx.stroke();
 
-        i++;
+
+    for(let pa of this.paws){
+        ctx.beginPath();
+        let p = spaceToCanvas(pa, cam);
+        ctx.arc(p.x, p.y, this.pawR*cam.zoom, 0, Math.PI*2);
+        ctx.fill();
+        ctx.lineWidth = cam.zoom*.6;
+        ctx.beginPath();
+        ctx.moveTo(bodyP.x, bodyP.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
     }
 }
 
@@ -179,8 +187,8 @@ aaaaaaaaaaa
 }
 
 World.prototype.update = function(dt){
-    this.cam.rot += ((this.mouse.rot+Math.PI/2)-this.cam.rot)*(1-Math.pow(1-0.95, dt));
-    this.cam.pos = this.cam.pos.add(this.mouse.pos.sub(this.cam.pos).mul(1-Math.pow(1-1, dt/.2)));
+    this.cam.rot += ((this.mouse.rot+Math.PI/2)-this.cam.rot)*lerpDtCoef(dt, .95, 1)
+    this.cam.pos = lerpDt(this.cam.pos, this.mouse.pos.add(arVec(this.mouse.rot, 1)), dt, 1, .5)
     for(object of this.objects){
         if(object.update !== undefined){
             object.update(dt);
