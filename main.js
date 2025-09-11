@@ -12,6 +12,42 @@ let lerpDtCoef = (dt, p, t)=>1-Math.pow(1-p, dt/t)
 let lerpDt = (a, b, dt, p, t)=>a.add(b.sub(a).mul(lerpDtCoef(dt, p, t)))
 let arVec = (a, r) => vec(Math.cos(a), Math.sin(a)).mul(r)
 
+function resolveCollisions(pos, radius, grid){
+    let col = false;
+    let gx = Math.floor(pos.x), gy = Math.floor(pos.y)
+    for(let y = gy-1; y<=gy+1; y++)
+        for(let x = gx-1; x<=gx+1; x++){
+            if (
+                y >= 0 && y < grid.length &&
+                x >= 0 && x < grid[y].length &&
+                grid[y][x] !== ' '
+              ){
+            let nearest = vec(Math.max(x, Math.min(pos.x, x+1)), Math.max(y, Math.min(pos.y, y+1)));
+            let delta = pos.sub(nearest)
+            let dist2 = delta.dot(delta);
+            if(dist2 < radius*radius){
+            let dist = Math.sqrt(dist2) || 0.0001
+            let push = delta.mul((radius - dist)/dist)
+            pos = pos.add(push)
+            col = true;
+            }
+        }
+        } 
+    return [col, pos];
+}
+
+function continuousCollisions(a, b, radius, grid){
+    let t;
+    let d = b.sub(a);
+    let it = Math.floor(d.length()/radius)+1;
+    for(let i = 1; i <= it; i++){
+        p = a.add(d.mul(i/it));
+        t = resolveCollisions(p, radius, grid);
+        if(t[0]) break;
+    }
+    return t[1];
+}
+
 const keyList = [];
 window.addEventListener('keydown',function(event){
     keyList[event.code] = true;
@@ -32,6 +68,7 @@ function Mouse(world, pos){
     this.radius = 0.25;
 
     this.hit = 0;
+    this.life = 1;
 }
 
 Mouse.prototype.update = function(dt){
@@ -40,53 +77,28 @@ Mouse.prototype.update = function(dt){
     this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .8, .2)
     this.rot += this.rotVel;
     this.vel = lerpDt(this.vel, velTarget, dt, .9, .5);
+    let lastPos = this.pos.copy();
     for(let paw of this.world.cat.paws){
         let d = this.pos.sub(paw);
         let dd = this.radius+this.world.cat.pawR;
-        if(d.length() < dd){
+        if(d.length() < dd && this.hit < 0){
             this.pos = paw.add(d.normalize().mul(dd+this.radius*.1));
-            this.vel = this.vel.add(d.normalize().mul(10));
+            //this.vel = this.vel.add(d.normalize().mul(10));
             this.hit = .2;
+            this.life -= .2;
+            console.log(this.life);
         }
     }
-    let lastPos = this.pos.copy();
     let pos2 = this.pos.add(this.vel.mul(dt));
-    let d = pos2.sub(this.pos);
-    let it = Math.ceil(d.length()/this.radius);
-    for(let i = 1; i <= it; i++){
-        this.pos = lastPos.add(d.mul(i/it));
-        if(this.resolveCollisions()) break;
-    }
+    this.pos = continuousCollisions(lastPos, pos2, this.radius, this.world.grid);
     this.vel = this.pos.sub(lastPos).mul(1/dt);
 
     this.hit-=dt;
-}
-
-Mouse.prototype.resolveCollisions = function(){
-    let col = false;
-    let gx = Math.floor(this.pos.x), gy = Math.floor(this.pos.y)
-    for(let y = gy-1; y<=gy+1; y++)
-        for(let x = gx-1; x<=gx+1; x++){
-            if (
-                y >= 0 && y < this.world.grid.length &&
-                x >= 0 && x < this.world.grid[y].length &&
-                this.world.grid[y][x] !== ' '
-              ){
-            let nearest = vec(Math.max(x, Math.min(this.pos.x, x+1)), Math.max(y, Math.min(this.pos.y, y+1)));
-            let delta = this.pos.sub(nearest)
-            let dist2 = delta.dot(delta);
-            if(dist2 < this.radius*this.radius){
-            let dist = Math.sqrt(dist2) || 0.0001
-            let push = delta.mul((this.radius - dist)/dist)
-            this.pos = this.pos.add(push)
-            col = true;
-            }
-        }
-        } 
-    return col;
+    this.life = Math.min(this.life+dt*.05,1);
 }
 
 Mouse.prototype.draw = function(cam){
+    ctx.globalAlpha = this.life;
     ctx.fillStyle = this.hit > 0 ? "white" : "rgb(125, 92, 54)";
     ctx.beginPath();
     let cvPos = spaceToCanvas(this.pos, cam);
@@ -102,9 +114,10 @@ function Cat(world, pos){
     this.world = world;
     this.pos = pos;
     this.vel = vec(0);
-    let d = 2.5;
-    this.head = this.pos.add(vec(0,d));
-    this.pawsOffset = [vec(-d, -d),vec(d, -d),vec(d,d*2),vec(-d,d*2)];
+    let dy = 5;
+    let dx = 2;
+    this.head = this.pos.add(vec(0,2));
+    this.pawsOffset = [vec(1, -dx),vec(dy, -dx),vec(dy,dx),vec(1,dx)];
     this.paws = [];
     this.pawsTargets = [];
     for(let i = 0; i < 4; i++){
@@ -114,28 +127,33 @@ function Cat(world, pos){
     this.headR = 1;
     this.pawR = 0.6;
     this.bodyR = 1.3;
-    this.legL = 3;
+    this.legL = 5;
 }
 
 Cat.prototype.update = function(dt){
     let d = this.world.mouse.pos.sub(this.pos);
-    let velTarget = d.normalize().mul(5);
+    let velTarget = d.normalize().mul(8);
     this.vel = lerpDt(this.vel, velTarget, dt, .9, .5)
-    this.pos = this.pos.add(this.vel.mul(dt));
+    this.pos = continuousCollisions(this.pos, this.pos.add(this.vel.mul(dt)), this.bodyR, this.world.grid);
 
     let headTarget = this.pos.add(this.vel.normalize().mul(4))
-    this.head = lerpDt(this.head, headTarget, dt, .8, .5)
+    this.head = continuousCollisions(this.head,lerpDt(this.head, headTarget, dt, .8, .5), this.headR, this.world.grid)
 
     for(let i = 0; i < 4; i++){
-        let target = this.pos.add(rotate(this.pawsOffset[i], Math.atan2(-this.vel.y, this.vel.x)));
+        let target = this.pos.add(rotate(this.pawsOffset[i], Math.atan2(this.vel.y, this.vel.x)));
         if(this.paws[i].sub(target).length() > this.legL){
-            this.pawsTargets[i] = d.length() < this.legL*1.5 ? this.world.mouse.pos : target;
+            this.pawsTargets[i] = ((i == 1 || i == 2) && d.length() < this.legL*1.5) ? this.world.mouse.pos : target;
         }
-        this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1)
+        this.paws[i] = continuousCollisions(this.paws[i], lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid);
+        //this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid;
     }
 }
 
-Cat.prototype.draw = function(cam){
+Cat.prototype.draw = function(cam, shadow){
+    if(shadow){
+        ctx.globalAlpha /= 2;
+        cam.pos.x += shadow;
+    }
     ctx.fillStyle = "black";
     ctx.beginPath();
     let headP = spaceToCanvas(this.head, cam);
@@ -152,7 +170,19 @@ Cat.prototype.draw = function(cam){
     ctx.lineTo(bodyP.x, bodyP.y);
     ctx.stroke();
 
+    let n = this.vel.normalize();
+    let o = vec(-n.y, n.x);
+    ctx.lineWidth = 0.6*cam.zoom;
+    ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(bodyP.x, bodyP.y);
+    for(let i = 0; i < 10; i++){
+        let p = spaceToCanvas(this.pos.sub(n.mul(this.bodyR+i*.25)).add(o.mul(0.1*i*Math.sin(i*.5+this.world.time*2))), cam);
+        ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
 
+    if(shadow) cam.pos.x -= shadow;
     for(let pa of this.paws){
         ctx.beginPath();
         let p = spaceToCanvas(pa, cam);
@@ -164,42 +194,75 @@ Cat.prototype.draw = function(cam){
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
     }
+    if(shadow){
+        ctx.globalAlpha *= 2;
+    }
 }
 const parseGrid = s => (/\d/.test(s)?s.replace(/(\d+)([\s\S])/g,(_,n,c)=>c.repeat(+n)):s).split('\n').map(r=>r.split(''));
 
 function World(){
-    this.mouse = new Mouse(this, vec(-1));
-    this.cat = new Cat(this, vec(-8));
+    this.time = 0;
+    this.mouse = new Mouse(this, vec(20));
+    this.cat = new Cat(this, vec(15));
     this.objects = [this.mouse, this.cat];
-    this.cam = {pos: vec(), rot: 0, zoom: 50};
+    this.cam = {pos: vec(), rot: 0, zoom: 20};
     let gridStr = 
 `
-26a1
-1a24 1a1
-1a1 6a1 15a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a9 2a4 6a1 1a1
-1a1 1a9 2a4 6a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 7a3 2a9 1a1 1a1
-1a1 7a3 2a9 1a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a9 2a9 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a1 1a20 1a1 1a1
-1a24 1a1
-1a1 1a20 1a1 1a1
-11a3 12a1
+42 13a5 1
+43a11 6a1
+2a26 1a11 1a18 1a1
+1a27 1a11 1a18 1a1
+1a27 1a11 1a18 1a1
+1a27 1a11 9a10 1a1
+1a10 10a1 7a11 1a7 1a10 1a1
+1a14 1a12 1a5 1a5 1a7 1a10 1a1
+1a14 1a12 1a5 1a5 1a3 1a3 1a10 1a1
+1a14 1a12 1a5 1a5 1a3 1a3 1a10 1a1
+1a14 1a12 1a5 1a5 1a3 1a3 1a9 2a1
+9a6 1a12 1a5 1a5 1a3 1a3 1a9 1a1 1
+1a14 1a12 1a5 1a5 5a3 1a9 1a1 1
+1a14 1a12 1a5 1a13 1a9 1a1 1
+1a14 1a12 1a5 1a13 1a9 1a1 1
+1a14 1a12 1a5 1a13 1a9 1a1 1
+1a13 2a12 1a5 1a13 1a9 1a1 1
+1a13 1a13 1a5 1a13 1a9 2a1
+1a13 1a13 1a5 3a11 1a10 1a1
+1a13 1a13 1a7 1a11 1a10 1a1
+1a13 1a13 1a7 1a11 1a10 1a1
+1a27 1a7 1a22 1a1
+1a35 1a22 1a1
+1a35 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a50 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 21a7 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a22 1a1
+1a7 1a27 1a21 2a1
+1a7 1a27 1a21 1a1 1
+1a35 1a6 11a6 1
+1a18 1a16 1a6 1a14 1a1 1
+1a18 1a16 1a6 1a1 7a6 1a1 1
+1a18 1a16 1a6 1a1 1a12 1a1 1
+1a18 1a23 1a1 1a12 1a1 1
+1a18 1a23 1a1 1a12 1a1 1
+1a18 1a23 1a1 1a12 1a1 1
+1a18 1a23 1a1 1a12 1a1 1
+1a18 1a23 1a1 1a5 1a6 1a1 1
+1a18 1a23 1a1 1a5 1a5 2a1 1
+1a18 1a23 1a1 1a5 1a5 2a1 1
+1a18 1a23 1a1 1a5 1a5 1a2 1
+1a18 1a23 1a1 1a5 1a5 1a2 1
+1a18 1a25 1a5 1a5 1a2 1
+1a18 1a25 1a5 1a4 2a2 1
+1a18 1a25 1a5 1a4 2a2 1
+57a3 1
 `;
     this.grid = parseGrid(gridStr);
     // this.grid = [];
@@ -226,21 +289,32 @@ World.prototype.update = function(dt){
             object.update(dt);
         }
     }
+    this.time += dt;
 }
 
 World.prototype.draw = function(){
     ctx.fillStyle = "rgb(79, 58, 0)";
     ctx.fillRect(0, 0, cv.width, cv.height);
+    this.cat.draw(this.cam, .6);
     for(object of this.objects){
         if(object.draw !== undefined){
             object.draw(this.cam);
         }
     }
+    let z = this.cam.zoom;
+    for(let d = 0; d < 20; d++){
+        this.cam.zoom = z*(1+d*.05);
+        this.drawGrid();
+    }
+    this.cam.zoom = z;
+}
+
+World.prototype.drawGrid = function(){
     for(let i = 0; i < this.grid.length; i++){
         for(let j = 0; j < this.grid[i].length; j++){
             let c = this.grid[i][j];
             if(c != ' '){
-                ctx.fillStyle = "black";
+                ctx.fillStyle = "rgb(42, 31, 17)";
                 ctx.beginPath();
                 let corners = [[0,0], [0,1], [1,1], [1,0]];
                 for(let ind = 0; ind < corners.length; ind++){
