@@ -72,17 +72,18 @@ function Mouse(world, pos){
 }
 
 Mouse.prototype.update = function(dt){
-    let velTarget = arVec(this.rot, (keyList["ArrowUp"]?15:0)-(keyList["ArrowDown"]?5:0));
-    let rotVelTarget = ((keyList["ArrowRight"]?1:0)-(keyList["ArrowLeft"]?1:0))*.1;
-    this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .8, .2)
+    let aliv = this.life > -.5;
+    let velTarget = aliv ? (arVec(this.rot, (keyList["ArrowUp"]?15:0)-(keyList["ArrowDown"]?5:0))) : vec();
+    let rotVelTarget = aliv ? ((keyList["ArrowRight"]?1:0)-(keyList["ArrowLeft"]?1:0))*.06 : 0;
+    this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .9, .2)
     this.rot += this.rotVel;
-    this.vel = lerpDt(this.vel, velTarget, dt, .9, .5);
+    this.vel = lerpDt(this.vel, velTarget, dt, .9, .3);
     let lastPos = this.pos.copy();
     for(let paw of this.world.cat.paws){
         let d = this.pos.sub(paw);
         let dd = this.radius+this.world.cat.pawR;
-        if(d.length() < dd && this.hit < 0){
-            this.pos = paw.add(d.normalize().mul(dd+this.radius*.1));
+        if(aliv && d.length() < dd && this.hit < 0){
+            this.pos = paw.add(d.normalize().mul(dd+this.radius*.2));
             //this.vel = this.vel.add(d.normalize().mul(10));
             this.hit = .2;
             this.life -= .2;
@@ -94,7 +95,7 @@ Mouse.prototype.update = function(dt){
     this.vel = this.pos.sub(lastPos).mul(1/dt);
 
     this.hit-=dt;
-    this.life = Math.min(this.life+dt*.05,1);
+    if(aliv) this.life = Math.min(this.life+dt*.05,1);
 }
 
 Mouse.prototype.draw = function(cam){
@@ -152,7 +153,8 @@ Cat.prototype.update = function(dt){
 Cat.prototype.draw = function(cam, shadow){
     if(shadow){
         ctx.globalAlpha /= 2;
-        cam.pos.x += shadow;
+        //cam.pos.x += shadow;
+        cam.zoom *= 1.1;
     }
     ctx.fillStyle = "black";
     ctx.beginPath();
@@ -182,7 +184,7 @@ Cat.prototype.draw = function(cam, shadow){
     }
     ctx.stroke();
 
-    if(shadow) cam.pos.x -= shadow;
+    if(shadow) cam.zoom /= 1.1;//cam.pos.x -= shadow;
     for(let pa of this.paws){
         ctx.beginPath();
         let p = spaceToCanvas(pa, cam);
@@ -205,7 +207,7 @@ function World(){
     this.mouse = new Mouse(this, vec(20));
     this.cat = new Cat(this, vec(15));
     this.objects = [this.mouse, this.cat];
-    this.cam = {pos: vec(), rot: 0, zoom: 20};
+    this.cam = {pos: vec(), rot: 0, zoom: 30};
     let gridStr = 
 `
 42 13a5 1
@@ -334,18 +336,31 @@ World.prototype.drawGrid = function(){
 
 function Game(){
     this.world = new World();
-    console.log(this.world);
+    this.lastUpdateTime = null;
 }
 
 Game.prototype.loop = function(){
-    this.world.update(1/30);
+    const now = Date.now();
+    const dtInMilliseconds = this.lastUpdateTime == null ? 1000/60 : now-this.lastUpdateTime;
+    this.lastUpdateTime = now;
+    const dtInSeconds = dtInMilliseconds/1000;
+    this.world.update(dtInSeconds);
     this.world.draw();
-}
+    if(this.world.mouse.life < -.5){
+        ctx.fillStyle = "white";
+        ctx.font = "60px Verdana";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle"
+        ctx.fillText("Game Over", cv.width/2, cv.height/2-40);
+        ctx.font = "30px Verdana";
+        ctx.fillText("R to restart", cv.width/2, cv.height/2+30);
+        if(keyList["KeyR"]){
+            this.world = new World();
+        }
 
-Game.prototype.run = function(){
-    setInterval(this.loop.bind(this), 1000/30);
+    }
+    requestAnimationFrame(this.loop.bind(this))
 }
-
 
 let game = new Game();
-game.run();
+requestAnimationFrame(game.loop.bind(game))
