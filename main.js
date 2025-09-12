@@ -137,9 +137,18 @@ function Cat(world, pos){
     this.pawR = 0.6;
     this.bodyR = 1.3;
     this.legL = 5;
+    this.dead = false;
 }
 
 Cat.prototype.update = function(dt){
+    let h = this.world.hole;
+    if(this.world.cheese.length == 0 && this.pos.sub(h).length() < this.bodyR) this.dead = true;
+    if(this.dead){
+        this.head = lerpDt(this.head, h, dt, .9, .4);
+        this.pos = lerpDt(this.pos, h, dt, .9, .4);
+        for(let i = 0; i < 4; i++) this.paws[i] = lerpDt(this.paws[i], h, dt, .9, .4);
+        return
+    }
     let d = this.world.mouse.pos.sub(this.pos);
     let velTarget = d.normalize().mul(8);
     this.vel = lerpDt(this.vel, velTarget, dt, .9, .5)
@@ -297,6 +306,8 @@ function World(){
         }
     }while(maxD < 10);
     console.log(this.cheese)
+    this.hole = vec(this.grid.length/2, this.grid[1].length/2);
+    this.holeR = 2;
 
     // this.grid = [];
     // let i = -1; let j = 0;
@@ -315,7 +326,7 @@ function World(){
 }
 
 World.prototype.update = function(dt){
-    this.cam.rot += ((this.mouse.rot+Math.PI/2)-this.cam.rot)*lerpDtCoef(dt, .95, 1)
+    this.cam.rot += ((this.mouse.rot+Math.PI/2)-this.cam.rot)*lerpDtCoef(dt, .95, .8)
     this.cam.pos = lerpDt(this.cam.pos, this.mouse.pos.add(arVec(this.mouse.rot, 1)), dt, 1, .5)
     for(object of this.objects){
         if(object.update !== undefined){
@@ -328,10 +339,15 @@ World.prototype.update = function(dt){
 World.prototype.draw = function(){
     ctx.fillStyle = "rgb(79, 58, 0)";
     ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = this.cheese.length > 0?"rgb(72, 72, 72)":"black"
+    ctx.beginPath();
+    let p = spaceToCanvas(this.hole, this.cam);
+    ctx.arc(p.x, p.y, this.cam.zoom*this.holeR, 0, Math.PI*2);
+    ctx.fill();
     ctx.fillStyle = "rgb(244, 229, 66)"
     for(let c of this.cheese){
         ctx.beginPath();
-        let p = spaceToCanvas(c, this.cam);
+        p = spaceToCanvas(c, this.cam);
         ctx.arc(p.x, p.y, this.cam.zoom*.4, 0, Math.PI*2);
         ctx.fill();
     }
@@ -389,7 +405,7 @@ Game.prototype.loop = function(){
     ctx.textBaseline = "middle"
     ctx.font = "30px Verdana";
     let l = this.world.cheese.length;
-    ctx.fillText(l > 0?String(l):"Guide Cat into hole", cv.width/2, 100);
+    if(!this.world.cat.dead)ctx.fillText(l > 0?String(l):"Guide Cat into hole", cv.width/2, 100);
     if(this.world.mouse.life < -.5){
         ctx.fillText("R to restart", cv.width/2, cv.height/2+30);
         ctx.font = "60px Verdana";
@@ -398,6 +414,9 @@ Game.prototype.loop = function(){
             this.world = new World();
         }
 
+    } else if(this.world.cat.dead){
+        ctx.font = "60px Verdana";
+        ctx.fillText("You Win!!!", cv.width/2, cv.height/2-40);
     }
     requestAnimationFrame(this.loop.bind(this))
 }
