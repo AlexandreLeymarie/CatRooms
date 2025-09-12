@@ -90,16 +90,24 @@ Mouse.prototype.update = function(dt){
             console.log(this.life);
         }
     }
+
+    for(let i = this.world.cheese.length-1; i >= 0; i--){
+        if(this.world.cheese[i].sub(this.pos).length() < this.radius+.4){
+            this.world.cheese.splice(i,1);
+        }
+    }
     let pos2 = this.pos.add(this.vel.mul(dt));
     this.pos = continuousCollisions(lastPos, pos2, this.radius, this.world.grid);
     this.vel = this.pos.sub(lastPos).mul(1/dt);
 
     this.hit-=dt;
     if(aliv) this.life = Math.min(this.life+dt*.05,1);
+    //console.log(this.life);
 }
 
 Mouse.prototype.draw = function(cam){
-    ctx.globalAlpha = this.life;
+    ctx.globalAlpha = this.life > .2?this.life:0.2*(this.life+.5)/.7;
+    //console.log(ctx.globalAlpha);
     ctx.fillStyle = this.hit > 0 ? "white" : "rgb(125, 92, 54)";
     ctx.beginPath();
     let cvPos = spaceToCanvas(this.pos, cam);
@@ -205,7 +213,7 @@ const parseGrid = s => (/\d/.test(s)?s.replace(/(\d+)([\s\S])/g,(_,n,c)=>c.repea
 function World(){
     this.time = 0;
     this.mouse = new Mouse(this, vec(20));
-    this.cat = new Cat(this, vec(15));
+    this.cat = new Cat(this, vec(30));
     this.objects = [this.mouse, this.cat];
     this.cam = {pos: vec(), rot: 0, zoom: 30};
     let gridStr = 
@@ -267,6 +275,29 @@ function World(){
 57a3 1
 `;
     this.grid = parseGrid(gridStr);
+    
+    let maxD;
+    do{
+        this.cheese = [];
+        maxD = 0;
+        for(let i = 0; i < 10; i++){
+            let cp, y, x, minD;
+            do{
+                y = Math.floor(Math.random()*this.grid.length);
+                x = Math.floor(Math.random()*this.grid[y].length);
+                cp = vec(x, y);
+                minD = 1e10;
+                for(let c of this.cheese){
+                    let d = cp.sub(c).length();
+                    if(d < minD) minD = d;
+                    if(d > maxD) maxD = d;
+                }
+            }while(this.grid[y][x] != ' ' || minD < 5);
+            this.cheese.push(cp.add(vec(.5)))
+        }
+    }while(maxD < 10);
+    console.log(this.cheese)
+
     // this.grid = [];
     // let i = -1; let j = 0;
     // for(let char of gridStr){
@@ -297,6 +328,13 @@ World.prototype.update = function(dt){
 World.prototype.draw = function(){
     ctx.fillStyle = "rgb(79, 58, 0)";
     ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "rgb(244, 229, 66)"
+    for(let c of this.cheese){
+        ctx.beginPath();
+        let p = spaceToCanvas(c, this.cam);
+        ctx.arc(p.x, p.y, this.cam.zoom*.4, 0, Math.PI*2);
+        ctx.fill();
+    }
     this.cat.draw(this.cam, .6);
     for(object of this.objects){
         if(object.draw !== undefined){
@@ -346,14 +384,16 @@ Game.prototype.loop = function(){
     const dtInSeconds = dtInMilliseconds/1000;
     this.world.update(dtInSeconds);
     this.world.draw();
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle"
+    ctx.font = "30px Verdana";
+    let l = this.world.cheese.length;
+    ctx.fillText(l > 0?String(l):"Guide Cat into hole", cv.width/2, 100);
     if(this.world.mouse.life < -.5){
-        ctx.fillStyle = "white";
-        ctx.font = "60px Verdana";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle"
-        ctx.fillText("Game Over", cv.width/2, cv.height/2-40);
-        ctx.font = "30px Verdana";
         ctx.fillText("R to restart", cv.width/2, cv.height/2+30);
+        ctx.font = "60px Verdana";
+        ctx.fillText("Game Over", cv.width/2, cv.height/2-40);
         if(keyList["KeyR"]){
             this.world = new World();
         }
