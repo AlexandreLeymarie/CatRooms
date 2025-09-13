@@ -14,25 +14,37 @@ let arVec = (a, r) => vec(Math.cos(a), Math.sin(a)).mul(r)
 
 function resolveCollisions(pos, radius, grid){
     let col = false;
-    let gx = Math.floor(pos.x), gy = Math.floor(pos.y)
-    for(let y = gy-1; y<=gy+1; y++)
-        for(let x = gx-1; x<=gx+1; x++){
+    let gx = Math.floor(pos.x / blockSize),
+        gy = Math.floor(pos.y / blockSize);
+
+    for(let y = gy - 1; y <= gy + 1; y++){
+        for(let x = gx - 1; x <= gx + 1; x++){
             if (
                 y >= 0 && y < grid.length &&
                 x >= 0 && x < grid[y].length &&
                 grid[y][x] !== ' '
-              ){
-            let nearest = vec(Math.max(x, Math.min(pos.x, x+1)), Math.max(y, Math.min(pos.y, y+1)));
-            let delta = pos.sub(nearest)
-            let dist2 = delta.dot(delta);
-            if(dist2 < radius*radius){
-            let dist = Math.sqrt(dist2) || 0.0001
-            let push = delta.mul((radius - dist)/dist)
-            pos = pos.add(push)
-            col = true;
+            ){
+                let minX = x * blockSize,
+                    maxX = (x + 1) * blockSize,
+                    minY = y * blockSize,
+                    maxY = (y + 1) * blockSize;
+                let nearest = vec(
+                    Math.max(minX, Math.min(pos.x, maxX)),
+                    Math.max(minY, Math.min(pos.y, maxY))
+                );
+
+                let delta = pos.sub(nearest);
+                let dist2 = delta.dot(delta);
+
+                if(dist2 < radius * radius){
+                    let dist = Math.sqrt(dist2) || 0.0001;
+                    let push = delta.mul((radius - dist) / dist);
+                    pos = pos.add(push);
+                    col = true;
+                }
             }
         }
-        } 
+    }
     return [col, pos];
 }
 
@@ -77,7 +89,7 @@ Mouse.prototype.update = function(dt){
     let rotVelTarget = aliv ? ((keyList["ArrowRight"]?1:0)-(keyList["ArrowLeft"]?1:0))*.06 : 0;
     this.rotVel += (rotVelTarget-this.rotVel)*lerpDtCoef(dt, .9, .2)
     this.rot += this.rotVel;
-    this.vel = lerpDt(this.vel, velTarget, dt, .9, .3);
+    this.vel = lerpDt(this.vel, velTarget, dt, .9, .2);
     let lastPos = this.pos.copy();
     for(let paw of this.world.cat.paws){
         let d = this.pos.sub(paw);
@@ -217,112 +229,42 @@ Cat.prototype.draw = function(cam, shadow){
         ctx.globalAlpha *= 2;
     }
 }
-const parseGrid = s => (/\d/.test(s)?s.replace(/(\d+)([\s\S])/g,(_,n,c)=>c.repeat(+n)):s).split('\n').map(r=>r.split(''));
+const parseGrid = (str) => str.trim().split("\n").map(row => [...row]);
 
 function World(){
     this.time = 0;
-    this.mouse = new Mouse(this, vec(20));
-    this.cat = new Cat(this, vec(30));
-    this.objects = [this.mouse, this.cat];
-    this.cam = {pos: vec(), rot: 0, zoom: 30};
-    let gridStr = 
-`
-42 13a5 1
-43a11 6a1
-2a26 1a11 1a18 1a1
-1a27 1a11 1a18 1a1
-1a27 1a11 1a18 1a1
-1a27 1a11 9a10 1a1
-1a10 10a1 7a11 1a7 1a10 1a1
-1a14 1a12 1a5 1a5 1a7 1a10 1a1
-1a14 1a12 1a5 1a5 1a3 1a3 1a10 1a1
-1a14 1a12 1a5 1a5 1a3 1a3 1a10 1a1
-1a14 1a12 1a5 1a5 1a3 1a3 1a9 2a1
-9a6 1a12 1a5 1a5 1a3 1a3 1a9 1a1 1
-1a14 1a12 1a5 1a5 5a3 1a9 1a1 1
-1a14 1a12 1a5 1a13 1a9 1a1 1
-1a14 1a12 1a5 1a13 1a9 1a1 1
-1a14 1a12 1a5 1a13 1a9 1a1 1
-1a13 2a12 1a5 1a13 1a9 1a1 1
-1a13 1a13 1a5 1a13 1a9 2a1
-1a13 1a13 1a5 3a11 1a10 1a1
-1a13 1a13 1a7 1a11 1a10 1a1
-1a13 1a13 1a7 1a11 1a10 1a1
-1a27 1a7 1a22 1a1
-1a35 1a22 1a1
-1a35 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a50 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 21a7 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a22 1a1
-1a7 1a27 1a21 2a1
-1a7 1a27 1a21 1a1 1
-1a35 1a6 11a6 1
-1a18 1a16 1a6 1a14 1a1 1
-1a18 1a16 1a6 1a1 7a6 1a1 1
-1a18 1a16 1a6 1a1 1a12 1a1 1
-1a18 1a23 1a1 1a12 1a1 1
-1a18 1a23 1a1 1a12 1a1 1
-1a18 1a23 1a1 1a12 1a1 1
-1a18 1a23 1a1 1a12 1a1 1
-1a18 1a23 1a1 1a5 1a6 1a1 1
-1a18 1a23 1a1 1a5 1a5 2a1 1
-1a18 1a23 1a1 1a5 1a5 2a1 1
-1a18 1a23 1a1 1a5 1a5 1a2 1
-1a18 1a23 1a1 1a5 1a5 1a2 1
-1a18 1a25 1a5 1a5 1a2 1
-1a18 1a25 1a5 1a4 2a2 1
-1a18 1a25 1a5 1a4 2a2 1
-57a3 1
-`;
-    this.grid = parseGrid(gridStr);
-    
-    let maxD;
-    do{
-        this.cheese = [];
-        maxD = 0;
-        for(let i = 0; i < 10; i++){
-            let cp, y, x, minD;
-            do{
-                y = Math.floor(Math.random()*this.grid.length);
-                x = Math.floor(Math.random()*this.grid[y].length);
-                cp = vec(x, y);
-                minD = 1e10;
-                for(let c of this.cheese){
-                    let d = cp.sub(c).length();
-                    if(d < minD) minD = d;
-                    if(d > maxD) maxD = d;
-                }
-            }while(this.grid[y][x] != ' ' || minD < 5);
-            this.cheese.push(cp.add(vec(.5)))
+    this.cam = {pos: vec(), rot: 0, zoom: 20};
+    this.cheese = [];
+    this.grid = parseGrid(mapstr);
+    let cp;
+    let mp;
+    for(let i = 0; i < this.grid.length; i++){
+        for(let j = 0; j < this.grid[i].length; j++){
+            let c = this.grid[i][j]
+            let center = vec(j+.5, i+.5).mul(blockSize);
+            if(c == 'c'){
+                this.cheese.push(center)
+                this.grid[i][j] = ' '
+            }
+            if(c == 'h'){
+                this.hole = center
+                this.grid[i][j] = ' '
+            }
+            if(c == 'b'){
+                cp = center
+                this.grid[i][j] = ' '
+            }
+            if(c == 'm'){
+                mp = center
+                this.grid[i][j] = ' '
+            }
         }
-    }while(maxD < 10);
+    }
+    this.mouse = new Mouse(this, mp);
+    this.cat = new Cat(this, cp);
+    this.objects = [this.mouse, this.cat];
     console.log(this.cheese)
-    this.hole = vec(this.grid.length/2, this.grid[1].length/2);
     this.holeR = 2;
-
-    // this.grid = [];
-    // let i = -1; let j = 0;
-    // for(let char of gridStr){
-    //     if(char == '\n'){
-    //         i++;
-    //         j = 0;
-    //     } else {
-    //         if(j == 0) this.grid[i] = [];
-    //         this.grid[i][j] = char;
-    //         j++;
-    //     }
-    // }
-
-    // console.log(this.grid);
 }
 
 World.prototype.update = function(dt){
@@ -358,7 +300,7 @@ World.prototype.draw = function(){
         }
     }
     let z = this.cam.zoom;
-    for(let d = 0; d < 20; d++){
+    for(let d = 0; d < 30; d++){
         this.cam.zoom = z*(1+d*.05);
         this.drawGrid();
     }
@@ -375,7 +317,7 @@ World.prototype.drawGrid = function(){
                 let corners = [[0,0], [0,1], [1,1], [1,0]];
                 for(let ind = 0; ind < corners.length; ind++){
                     let cornerPos = vec(j, i).add(vec(corners[ind][0], corners[ind][1]))
-                    let cvc = spaceToCanvas(cornerPos, this.cam);
+                    let cvc = spaceToCanvas(cornerPos.mul(blockSize), this.cam);
                     if(ind == 0){
                         ctx.moveTo(cvc.x, cvc.y);
                     } else {
