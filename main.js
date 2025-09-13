@@ -3,7 +3,119 @@ const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 
 cv.width = 800;
-cv.height = 700;
+cv.height = 800;
+
+ function computeProximityGrid(grid,threshold,maxVal){
+    const h=grid.length,w=h?grid[0].length:0;
+    const INF=1e9,dist=Array.from({length:h},()=>Array(w).fill(INF)),q=[];
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(grid[y][x]==='a'){dist[y][x]=0;q.push([x,y]);}
+    for(let i=0;i<q.length;i++){
+      const [cx,cy]=q[i],d=dist[cy][cx]+1;
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{
+        const nx=cx+dx,ny=cy+dy;
+        if(nx>=0&&nx<w&&ny>=0&&ny<h&&dist[ny][nx]>d){dist[ny][nx]=d;q.push([nx,ny]);}
+      });
+    }
+    const prox=Array.from({length:h},()=>Array(w).fill(0));
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const d=dist[y][x];
+      prox[y][x]= grid[y][x]==='a'? maxVal : (d<=threshold? maxVal*(1-d/threshold):0);
+    }
+    return prox;
+  }
+  
+// Simple binary heap
+class MinHeap {
+    constructor() { this.data = []; }
+    push(f, node) {
+      this.data.push({ f, node });
+      let i = this.data.length - 1;
+      while (i > 0) {
+        let p = (i - 1) >> 1;
+        if (this.data[p].f <= this.data[i].f) break;
+        [this.data[p], this.data[i]] = [this.data[i], this.data[p]];
+        i = p;
+      }
+    }
+    pop() {
+      if (this.data.length === 0) return null;
+      const top = this.data[0].node;
+      const end = this.data.pop();
+      if (this.data.length > 0) {
+        this.data[0] = end;
+        let i = 0;
+        while (true) {
+          let l = 2 * i + 1, r = 2 * i + 2, smallest = i;
+          if (l < this.data.length && this.data[l].f < this.data[smallest].f) smallest = l;
+          if (r < this.data.length && this.data[r].f < this.data[smallest].f) smallest = r;
+          if (smallest === i) break;
+          [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
+          i = smallest;
+        }
+      }
+      return top;
+    }
+    isEmpty() { return this.data.length === 0; }
+  }
+  
+  // Optimized weighted A* pathfinding
+  function findWeightedPath(grid, prox, start, goal, weightFactor, maxVal) {
+    const h = grid.length, w = h ? grid[0].length : 0;
+    if (!h || !w) return null;
+  
+    function inBounds(x, y) { return x >= 0 && x < w && y >= 0 && y < h; }
+    function isPassable(x, y) { return grid[y][x] !== 'a'; }
+    function heuristic(ax, ay, bx, by) { return Math.hypot(bx - ax, by - ay); }
+  
+    if (!inBounds(start.x, start.y) || !inBounds(goal.x, goal.y)) return null;
+    if (!isPassable(start.x, start.y) || !isPassable(goal.x, goal.y)) return null;
+  
+    const cameFrom = Array.from({ length: h }, () => Array(w).fill(null));
+    const gScore = Array.from({ length: h }, () => Array(w).fill(Infinity));
+    gScore[start.y][start.x] = 0;
+  
+    const openHeap = new MinHeap();
+    openHeap.push(heuristic(start.x, start.y, goal.x, goal.y), start);
+  
+    const neighbors = [
+      { dx: 1, dy: 0, cost: 1 }, { dx: -1, dy: 0, cost: 1 },
+      { dx: 0, dy: 1, cost: 1 }, { dx: 0, dy: -1, cost: 1 },
+      { dx: 1, dy: 1, cost: Math.SQRT2 }, { dx: 1, dy: -1, cost: Math.SQRT2 },
+      { dx: -1, dy: 1, cost: Math.SQRT2 }, { dx: -1, dy: -1, cost: Math.SQRT2 }
+    ];
+  
+    while (!openHeap.isEmpty()) {
+      const current = openHeap.pop();
+      if (current.x === goal.x && current.y === goal.y) {
+        const path = [];
+        let c = current;
+        while (c) {
+          path.push({ x: c.x, y: c.y });
+          c = cameFrom[c.y][c.x];
+        }
+        return path.reverse();
+      }
+  
+      for (const n of neighbors) {
+        const nx = current.x + n.dx;
+        const ny = current.y + n.dy;
+        if (!inBounds(nx, ny) || !isPassable(nx, ny)) continue;
+  
+        const proxValue = prox[ny][nx] || 0;
+        const moveCost = n.cost * (1 + (proxValue / maxVal) * weightFactor);
+        const tentativeG = gScore[current.y][current.x] + moveCost;
+  
+        if (tentativeG < gScore[ny][nx]) {
+          gScore[ny][nx] = tentativeG;
+          cameFrom[ny][nx] = current;
+          const f = tentativeG + heuristic(nx, ny, goal.x, goal.y);
+          openHeap.push(f, { x: nx, y: ny });
+        }
+      }
+    }
+  
+    return null; // no path
+  }
 
 let rotate=(v,a)=>{let c=Math.cos(a),s=Math.sin(a);return vec(v.x*c-v.y*s,v.x*s+v.y*c)}
 let spaceToCanvas=(p,cam)=>rotate(p.sub(cam.pos),-cam.rot).mul(cam.zoom).add(vec(cv.width/2,cv.height/2))
@@ -137,7 +249,7 @@ function Cat(world, pos){
     this.vel = vec(0);
     let dy = 5;
     let dx = 2;
-    this.head = this.pos.add(vec(0,2));
+    this.head = this.pos;
     this.pawsOffset = [vec(1, -dx),vec(dy, -dx),vec(dy,dx),vec(1,dx)];
     this.paws = [];
     this.pawsTargets = [];
@@ -150,6 +262,8 @@ function Cat(world, pos){
     this.bodyR = 1.3;
     this.legL = 5;
     this.dead = false;
+    this.path = null;
+    this.pathTimer = 0;
 }
 
 Cat.prototype.update = function(dt){
@@ -161,29 +275,51 @@ Cat.prototype.update = function(dt){
         for(let i = 0; i < 4; i++) this.paws[i] = lerpDt(this.paws[i], h, dt, .9, .4);
         return
     }
+    this.pathTimer -= dt;
+    if(this.path == null || this.pathTimer < 0){
+        let start = vec(Math.floor(this.pos.x/blockSize), Math.floor(this.pos.y/blockSize))
+        let end = {x:Math.floor(this.world.mouse.pos.x/blockSize), y:Math.floor(this.world.mouse.pos.y/blockSize)}
+        this.path = findWeightedPath(this.world.grid, this.world.weightedGrid, start, end, 10, 10);
+        this.pathTimer = Math.min(this.path.length/5, 3);
+        console.log(this.pathTimer)
+        console.log(this.path)
+        console.log("new path!")
+    }
     let d = this.world.mouse.pos.sub(this.pos);
-    let velTarget = d.normalize().mul(8);
+    let moveDir = d
+    if(this.path.length > 2){
+        let d0 = vec(this.path[0].x,this.path[0].y).mul(blockSize).sub(this.pos);
+        if(d0.length() < this.bodyR+blockSize){
+            this.path.splice(0, 1);
+        }
+        moveDir = d0;
+        //console.log(this.path.length)
+    }
+    // if(this.path.length >= 3){
+    //     moveDir = vec(this.path[2].x,this.path[2].y).mul(blockSize).sub(this.pos);
+    // }
+    let velTarget = moveDir.normalize().mul(12);
     this.vel = lerpDt(this.vel, velTarget, dt, .9, .5)
     this.pos = continuousCollisions(this.pos, this.pos.add(this.vel.mul(dt)), this.bodyR, this.world.grid);
 
-    let headTarget = this.pos.add(this.vel.normalize().mul(4))
-    this.head = continuousCollisions(this.head,lerpDt(this.head, headTarget, dt, .8, .5), this.headR, this.world.grid)
+    let headTarget = this.pos.add(this.vel.normalize().mul(5))
+    this.head = lerpDt(this.head, headTarget, dt, .8, .5);
+    //this.head = continuousCollisions(this.head,lerpDt(this.head, headTarget, dt, .8, .5), this.headR, this.world.grid)
 
     for(let i = 0; i < 4; i++){
         let target = this.pos.add(rotate(this.pawsOffset[i], Math.atan2(this.vel.y, this.vel.x)));
         if(this.paws[i].sub(target).length() > this.legL){
             this.pawsTargets[i] = ((i == 1 || i == 2) && d.length() < this.legL*1.5) ? this.world.mouse.pos : target;
         }
-        this.paws[i] = continuousCollisions(this.paws[i], lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid);
-        //this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid;
+        //this.paws[i] = continuousCollisions(this.paws[i], lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid);
+        this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid;
     }
 }
 
 Cat.prototype.draw = function(cam, shadow){
     if(shadow){
         ctx.globalAlpha /= 2;
-        //cam.pos.x += shadow;
-        cam.zoom *= 1.1;
+        cam.pos.x += shadow;
     }
     ctx.fillStyle = "black";
     ctx.beginPath();
@@ -213,7 +349,7 @@ Cat.prototype.draw = function(cam, shadow){
     }
     ctx.stroke();
 
-    if(shadow) cam.zoom /= 1.1;//cam.pos.x -= shadow;
+    if(shadow) cam.pos.x -= shadow;
     for(let pa of this.paws){
         ctx.beginPath();
         let p = spaceToCanvas(pa, cam);
@@ -260,6 +396,8 @@ function World(){
             }
         }
     }
+    this.weightedGrid = computeProximityGrid(this.grid, 5, 10);
+    console.log(this.weightedGrid);
     this.mouse = new Mouse(this, mp);
     this.cat = new Cat(this, cp);
     this.objects = [this.mouse, this.cat];
@@ -339,7 +477,7 @@ Game.prototype.loop = function(){
     const now = Date.now();
     const dtInMilliseconds = this.lastUpdateTime == null ? 1000/60 : now-this.lastUpdateTime;
     this.lastUpdateTime = now;
-    const dtInSeconds = dtInMilliseconds/1000;
+    const dtInSeconds = Math.min(0.1, dtInMilliseconds/1000);
     this.world.update(dtInSeconds);
     this.world.draw();
     ctx.fillStyle = "white";
