@@ -216,7 +216,7 @@ Mouse.prototype.update = function(dt){
     }
 
     for(let i = this.world.cheese.length-1; i >= 0; i--){
-        if(this.world.cheese[i].sub(this.pos).length() < this.radius+.4){
+        if(this.world.cheese[i].sub(this.pos).length() < this.radius+this.world.cheeseR){
             this.world.cheese.splice(i,1);
         }
     }
@@ -401,7 +401,7 @@ function World(){
     this.mouse = new Mouse(this, mp);
     this.cat = new Cat(this, cp);
     this.objects = [this.mouse, this.cat];
-    console.log(this.cheese)
+    this.cheeseR = 0.6;
     this.holeR = 2;
 }
 
@@ -428,7 +428,7 @@ World.prototype.draw = function(){
     for(let c of this.cheese){
         ctx.beginPath();
         p = spaceToCanvas(c, this.cam);
-        ctx.arc(p.x, p.y, this.cam.zoom*.4, 0, Math.PI*2);
+        ctx.arc(p.x, p.y, this.cam.zoom*this.cheeseR, 0, Math.PI*2);
         ctx.fill();
     }
     this.cat.draw(this.cam, .6);
@@ -485,7 +485,8 @@ Game.prototype.loop = function(){
     ctx.textBaseline = "middle"
     ctx.font = "30px Verdana";
     let l = this.world.cheese.length;
-    if(!this.world.cat.dead)ctx.fillText(l > 0?String(l):"Guide Cat into hole", cv.width/2, 100);
+    if(!this.world.cat.dead) ctx.fillText(l > 0?l+" cheese left":"Guide Cat into hole", cv.width/2, 100);
+    if(this.world.time < 3) ctx.fillText("Use Arrow Keys", cv.width/2, 300);
     if(this.world.mouse.life < -.5){
         ctx.fillText("R to restart", cv.width/2, cv.height/2+30);
         ctx.font = "60px Verdana";
