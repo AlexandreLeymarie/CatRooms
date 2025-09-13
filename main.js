@@ -1,4 +1,3 @@
-// npx terser main.js -o output.js -c -m --toplevel
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 
@@ -232,7 +231,7 @@ Mouse.prototype.update = function(dt){
 Mouse.prototype.draw = function(cam){
     ctx.globalAlpha = this.life > .2?this.life:0.2*(this.life+.5)/.7;
     //console.log(ctx.globalAlpha);
-    ctx.fillStyle = this.hit > 0 ? "white" : "rgb(125, 92, 54)";
+    ctx.fillStyle = this.hit > 0 ? "white" : "rgb(185, 185, 185)";
     ctx.beginPath();
     let cvPos = spaceToCanvas(this.pos, cam);
     ctx.arc(cvPos.x, cvPos.y, this.radius*cam.zoom, this.rot-cam.rot+Math.PI/2, this.rot-cam.rot+3*Math.PI/2);
@@ -281,9 +280,9 @@ Cat.prototype.update = function(dt){
         let end = {x:Math.floor(this.world.mouse.pos.x/blockSize), y:Math.floor(this.world.mouse.pos.y/blockSize)}
         this.path = findWeightedPath(this.world.grid, this.world.weightedGrid, start, end, 10, 10);
         this.pathTimer = Math.min(this.path.length/5, 3);
-        console.log(this.pathTimer)
-        console.log(this.path)
-        console.log("new path!")
+        //console.log(this.pathTimer)
+        //console.log(this.path)
+        //console.log("new path!")
     }
     let d = this.world.mouse.pos.sub(this.pos);
     let moveDir = d
@@ -302,17 +301,19 @@ Cat.prototype.update = function(dt){
     this.vel = lerpDt(this.vel, velTarget, dt, .9, .5)
     this.pos = continuousCollisions(this.pos, this.pos.add(this.vel.mul(dt)), this.bodyR, this.world.grid);
 
-    let headTarget = this.pos.add(this.vel.normalize().mul(5))
-    this.head = lerpDt(this.head, headTarget, dt, .8, .5);
-    //this.head = continuousCollisions(this.head,lerpDt(this.head, headTarget, dt, .8, .5), this.headR, this.world.grid)
+    let headTarget = this.pos.add(this.vel.normalize().mul(6))
+    //this.head = lerpDt(this.head, headTarget, dt, .8, .5);
+    this.head = continuousCollisions(this.head,lerpDt(this.head, headTarget, dt, .8, .5), this.headR, this.world.grid)
+    if(this.head.sub(headTarget).length() > 2*this.legL) this.head = headTarget;
 
     for(let i = 0; i < 4; i++){
         let target = this.pos.add(rotate(this.pawsOffset[i], Math.atan2(this.vel.y, this.vel.x)));
         if(this.paws[i].sub(target).length() > this.legL){
             this.pawsTargets[i] = ((i == 1 || i == 2) && d.length() < this.legL*1.5) ? this.world.mouse.pos : target;
         }
-        //this.paws[i] = continuousCollisions(this.paws[i], lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid);
-        this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid;
+        this.paws[i] = continuousCollisions(this.paws[i], lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid);
+        if(this.paws[i].sub(this.pawsTargets[i]).length() > 2*this.legL) this.paws[i] = this.pawsTargets[i];
+        //this.paws[i] = lerpDt(this.paws[i], this.pawsTargets[i], dt, .8, .1), this.pawR, this.world.grid;
     }
 }
 
@@ -417,20 +418,22 @@ World.prototype.update = function(dt){
 }
 
 World.prototype.draw = function(){
-    ctx.fillStyle = "rgb(79, 58, 0)";
+    ctx.fillStyle = "rgb(62, 52, 40)";
     ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = this.cheese.length > 0?"rgb(72, 72, 72)":"black"
+    this.drawGrid(true);
+    ctx.fillStyle = this.cheese.length > 0?"rgb(85, 85, 85)":"black"
     ctx.beginPath();
     let p = spaceToCanvas(this.hole, this.cam);
     ctx.arc(p.x, p.y, this.cam.zoom*this.holeR, 0, Math.PI*2);
     ctx.fill();
-    ctx.fillStyle = "rgb(244, 229, 66)"
+    ctx.fillStyle = "rgb(245, 233, 104)"
     for(let c of this.cheese){
         ctx.beginPath();
         p = spaceToCanvas(c, this.cam);
         ctx.arc(p.x, p.y, this.cam.zoom*this.cheeseR, 0, Math.PI*2);
         ctx.fill();
     }
+
     this.cat.draw(this.cam, .6);
     for(object of this.objects){
         if(object.draw !== undefined){
@@ -438,19 +441,19 @@ World.prototype.draw = function(){
         }
     }
     let z = this.cam.zoom;
-    for(let d = 0; d < 30; d++){
-        this.cam.zoom = z*(1+d*.05);
-        this.drawGrid();
+    for(let d = 1; d < 30; d++){
+        this.cam.zoom = z*(1+d*.03);
+        this.drawGrid(false);
     }
     this.cam.zoom = z;
 }
 
-World.prototype.drawGrid = function(){
+World.prototype.drawGrid = function(drawFloor){
     for(let i = 0; i < this.grid.length; i++){
         for(let j = 0; j < this.grid[i].length; j++){
             let c = this.grid[i][j];
-            if(c != ' '){
-                ctx.fillStyle = "rgb(42, 31, 17)";
+            if(c != ' ' || drawFloor){
+                ctx.fillStyle = c != ' ' ? "rgb(62, 52, 40)" : ((i+j)%2==0?"rgb(125, 118, 100)":"rgb(145, 137, 116)");
                 ctx.beginPath();
                 let corners = [[0,0], [0,1], [1,1], [1,0]];
                 for(let ind = 0; ind < corners.length; ind++){
